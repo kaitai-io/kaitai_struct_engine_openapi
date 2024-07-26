@@ -1,0 +1,217 @@
+#$schema: https://spec.openapis.org/oas/3.1/schema/2022-10-07
+openapi: 3.1.0
+info:
+  title: Kaitai Struct Engine API
+  description: |
+    Defines standard API for use .ksy parser sources to parse
+    arbitrary binary files and explore resulting object tree.
+
+    Supposed to be used by hex viewer/editor visualizers to
+    get a tree of object represented in a particular binary
+    stream, when it's interpreted according to a .ksy spec.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/
+paths:
+  /struct:
+    get:
+      operationId: structList
+      summary: List loaded struct parsers
+      description: Retrieve list of struct parsers loaded into this session and ready to be used.
+      responses:
+        "200":
+          description: Success
+          content:
+            json/application:
+              schema:
+                type: array
+                items:
+                  type: string
+  /struct/load_local:
+    post:
+      operationId: structLoadLocal
+      summary: Load local .ksy as struct parser into the engine
+      description: Given .ksy file, compiles the parser for this structure and imports it into the engine.
+      parameters:
+        - name: local_file
+          in: query
+          description: |
+            Path to the local file on the server to be loaded. Implementations will likely want to restrict this to a
+            specific directory.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            json/application:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+        "500":
+          description: Error
+          content:
+            json/application:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  /struct/upload:
+    post:
+      operationId: structUpload
+      summary: Load uploaded .ksy as struct parser into the engine
+      description: Given .ksy file, compiles the parser for this structure and imports it into the engine.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file contents to be uploaded
+      responses:
+        "200":
+          description: Success
+          content:
+            json/application:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+        "500":
+          description: Error
+          content:
+            json/application:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  /engine/load_local:
+    post:
+      operationId: engineLoadLocal
+      summary: Load a local file with a specific parser
+      description: |
+        Load and parse a local file with a specific parser. Results in a tree of objects created in
+        memory of the engine, which can be explored afterwards with /engine/explore.
+      parameters:
+        - name: local_file
+          in: query
+          description: Path to the local file to be loaded
+          required: true
+          schema:
+            type: string
+        - name: struct
+          in: query
+          description: Struct parser ID to use for loading the file
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+        "500":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /engine/explore:
+    get:
+      operationId: engineExplore
+      summary: Explore a path in object tree of the engine
+      description: |
+        Given a path in the object tree, returns the node at this path.
+      parameters:
+        - name: path
+          in: query
+          description: Path to explore, delimited by dots. If empty, returns the root node.
+          required: false
+          schema:
+            type: string
+        - name: depth
+          in: query
+          description: Number of levels to recurse into the tree
+          required: false
+          #default: 1
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+        "500":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    Node:
+      type: object
+      properties:
+        io:
+          type: string
+          description: Identifier of I/O stream associated with the node
+          example: 123
+        path:
+          type: array
+          items:
+            type: string
+          description: Path to the node in the object tree.
+          example:
+            - some_collection
+            - 5
+            - name
+        id:
+          type: string
+          description: Identifier of the node
+          example: some_collection
+        start:
+          type: integer
+          description: Start offset of the node in the stream
+          example: 0
+        end:
+          type: integer
+          description: End offset of the node in the stream
+          example: 4
+        type:
+          type: string
+          description: Type of the node, if it's a KaitaiStruct
+          example: string
+        seq:
+          type: array
+          items:
+            $ref: "#/components/schemas/Node"
+          description:
+            Sequence attributes, if the node is KaitaiStruct
+        instances:
+          type: object
+          description: Instances of the node, if it's a KaitaiStruct
+          additionalProperties:
+            $ref: "#/components/schemas/Node"
+        value:
+          description: Value of the node, if it's a leaf
